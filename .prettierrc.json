@@ -1,0 +1,26 @@
+{
+  "plugins": ["prettier-plugin-solidity"],
+  "semi": true,
+  "printWidth": 100,
+  "overrides": [
+    {
+      "files": "*.ts,*.vue",
+      "options": {
+        "$schema": "https://json.schemastore.org/prettierrc",
+        "singleQuote": true,
+        "tabWidth": 2,
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": "*.sol",
+      "options": {
+        "parser": "slang",
+        "tabWidth": 4,
+        "useTabs": false,
+        "singleQuote": false,
+        "bracketSpacing": false
+      }
+    }
+  ]
+}
