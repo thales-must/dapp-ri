@@ -17,6 +17,7 @@
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.1",
     "@types/node": "^22.19.1",
     "@vue/eslint-config-prettier": "^10.2.0",
+    "csv-stringify": "^6.7.0",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
     "hardhat": "^3.0.14",
     "prettier": "^3.6.2",
