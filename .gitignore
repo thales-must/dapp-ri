@@ -19,4 +19,9 @@
 # Hardhat coverage reports
 /coverage
 
+/ignition/deployments
+
 /opt
+.env
+
+/tmp_assets

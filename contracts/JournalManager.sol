@@ -3,29 +3,17 @@ pragma solidity ^0.8.20;
 
 contract JournalManager {
     // ----------------------------
-    // Asset Structure
-    // ----------------------------
-    struct Asset {
-        string path; // e.g., "figures/fig1.png"
-        bytes32 storageId; // EthStorage hash or similar
-    }
-
-    // ----------------------------
     // Article Structure
     // ----------------------------
     struct Article {
-        // --- Metadata ---
         string title;
         string[] authors;
+        string[] keywords;
         address submitter;
         uint256 timestamp;
-        // --- TEX Reconstruction ---
-        bytes32[] texTxIds; // calldata tx hashes
-        // --- Assets Mapping ---
-        Asset[] assets;
-        // --- Encrypted Key (optional) ---
+        bytes32[] texTxIds;
+        address dirContract;
         bytes encryptedKey;
-        // --- Optional external metadata ---
         string extraMetadataURI;
     }
 
@@ -33,7 +21,6 @@ contract JournalManager {
     // Storage
     // ----------------------------
     uint256 public articleCount;
-
     mapping(uint256 => Article) private articles;
 
     // ----------------------------
@@ -42,60 +29,90 @@ contract JournalManager {
     event ArticleSubmitted(uint256 indexed articleId, address indexed submitter, string title);
 
     // ----------------------------
-    // Submit Article (FULL PIPELINE)
+    // ✅ External Interface（🔥关键修改点）
     // ----------------------------
     function submitArticle(
-        string calldata _title,
-        string[] calldata _authors,
-        bytes32[] calldata _texTxIds,
-        Asset[] calldata _assets,
-        bytes calldata _encryptedKey,
-        string calldata _extraMetadataURI
+        string calldata title,
+        string[] calldata authors,
+        string[] calldata keywords,
+        bytes32[] calldata texTxIds,
+        address dirContract,
+        bytes calldata encryptedKey,
+        string calldata extraMetadataURI
     ) external returns (uint256) {
-        require(_texTxIds.length > 0, "Empty TEX");
+        require(texTxIds.length > 0, "Empty TEX");
 
         uint256 articleId = articleCount;
         Article storage a = articles[articleId];
 
         // --- Metadata ---
-        a.title = _title;
-        a.authors = _authors;
+        a.title = title;
         a.submitter = msg.sender;
         a.timestamp = block.timestamp;
 
-        // --- TEX ---
-        a.texTxIds = _texTxIds;
-
-        // --- Assets ---
-        for (uint256 i = 0; i < _assets.length; i++) {
-            a.assets.push(_assets[i]);
+        // --- Authors ---
+        for (uint256 i = 0; i < authors.length; i++) {
+            a.authors.push(authors[i]);
         }
 
+        // --- Keywords ---
+        for (uint256 i = 0; i < keywords.length; i++) {
+            a.keywords.push(keywords[i]);
+        }
+
+        // --- TEX ---
+        for (uint256 i = 0; i < texTxIds.length; i++) {
+            a.texTxIds.push(texTxIds[i]);
+        }
+
+        // --- Directory Contract ---
+        a.dirContract = dirContract;
+
         // --- Encryption ---
-        a.encryptedKey = _encryptedKey;
+        a.encryptedKey = encryptedKey;
 
         // --- Extra metadata ---
-        a.extraMetadataURI = _extraMetadataURI;
+        a.extraMetadataURI = extraMetadataURI;
 
         articleCount++;
 
-        emit ArticleSubmitted(articleId, msg.sender, _title);
+        emit ArticleSubmitted(articleId, msg.sender, title);
 
         return articleId;
     }
 
     // ----------------------------
-    // View: Basic Metadata
+    // View: Metadata
     // ----------------------------
-    function getArticleBasic(
+    function getArticle(
         uint256 articleId
     )
         external
         view
-        returns (string memory title, string[] memory authors, address submitter, uint256 timestamp)
+        returns (
+            string memory title,
+            string[] memory authors,
+            string[] memory keywords,
+            bytes32[] memory texTxIds,
+            address dirContract,
+            bytes memory encryptedKey,
+            string memory extraMetadataURI,
+            address submitter,
+            uint256 timestamp
+        )
     {
         Article storage a = articles[articleId];
-        return (a.title, a.authors, a.submitter, a.timestamp);
+        return (
+            a.title,
+            a.authors,
+            a.keywords,
+            a.texTxIds,
+            a.dirContract,
+            a.encryptedKey,
+            a.extraMetadataURI,
+            a.submitter,
+            a.timestamp
+        );
     }
 
     // ----------------------------
@@ -103,24 +120,6 @@ contract JournalManager {
     // ----------------------------
     function getTexTxIds(uint256 articleId) external view returns (bytes32[] memory) {
         return articles[articleId].texTxIds;
-    }
-
-    // ----------------------------
-    // View: Asset Count
-    // ----------------------------
-    function getAssetCount(uint256 articleId) external view returns (uint256) {
-        return articles[articleId].assets.length;
-    }
-
-    // ----------------------------
-    // View: Single Asset (分页防止爆gas)
-    // ----------------------------
-    function getAssetByIndex(
-        uint256 articleId,
-        uint256 index
-    ) external view returns (string memory path, bytes32 storageId) {
-        Asset storage asset = articles[articleId].assets[index];
-        return (asset.path, asset.storageId);
     }
 
     // ----------------------------
