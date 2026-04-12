@@ -24,4 +24,4 @@
 /opt
 .env
 
-/tmp_assets
+/tmp_*

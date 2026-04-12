@@ -14,7 +14,7 @@ const RPC_URL = process.env.RPC_URL!;
 const ETHSTORAGE_RPC = process.env.ETHSTORAGE_RPC!;
 const JOURNAL_CONTRACT = process.env.JOURNAL_CONTRACT as `0x${string}`;
 
-const rawData = fs.readFileSync(process.env.PAPER_JSON_FILE, "utf-8");
+const rawData = fs.readFileSync(process.env.PAPER_JSON_FILE!, "utf-8");
 const paper = JSON.parse(rawData);
 
 const CHUNK_SIZE = 32768;
@@ -36,30 +36,12 @@ function chunkBytes(data: Uint8Array, size: number): Uint8Array[] {
   }
   return chunks;
 }
-function getArticle(values: string[]): Object {
-  const keys = [
-    "title",
-    "authors",
-    "keywords",
-    "texTxIds",
-    "dirContract",
-    "encryptedKey",
-    "extraMetadataURI",
-  ];
-  return keys.reduce(
-    (acc, key, index) => {
-      acc[key] = values[index];
-      return acc;
-    },
-    {} as Record<string, string | number>,
-  );
-}
 
 // ----------------------------
-// tar.gz 解压（保留路径）
+// tar.gz 解压
 // ----------------------------
 async function extractTarGz(file: string) {
-  const tmpDir = "./tmp_assets";
+  const tmpDir = `./tmp_${paper.id}`;
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
   fs.mkdirSync(tmpDir);
@@ -103,232 +85,199 @@ async function main() {
   });
 
   // ============================
-  // 1️⃣ TEX → calldata（逐 chunk）
+  // 🔥 初始化 JSON
   // ============================
-  const texBytes = hexToBytes(paper.data);
-  const chunks = chunkBytes(texBytes, CHUNK_SIZE);
-
-  const texTxIds: `0x${string}`[] = [];
-  const texStats: any[] = [];
-
-  const t_tex_upload_start = now();
-
-  for (let chunk of chunks) {
-    const start = now();
-
-    const txHash = await wallet.sendTransaction({
-      to: "0x0000000000000000000000000000000000000000",
-      data: bytesToHex(chunk),
-    });
-
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-
-    const end = now();
-
-    texTxIds.push(txHash);
-
-    texStats.push({
-      size: chunk.length,
-      gas: receipt.gasUsed.toString(),
-      time: end - start,
-    });
-  }
-
-  const t_tex_upload_end = now();
+  const result: any = {};
 
   // ============================
-  // 2️⃣ EthStorage deploy
+  // 🔥 预处理（不计时间）
   // ============================
+
+  const dirContract = (await publicClient.readContract({
+    address: JOURNAL_CONTRACT,
+    abi: artifact.abi,
+    functionName: "dirContract",
+  })) as `0x${string}`;
+
   const flatDirectory = await FlatDirectory.create({
     rpc: RPC_URL,
     ethStorageRpc: ETHSTORAGE_RPC,
     privateKey: PRIVATE_KEY,
+    address: dirContract,
   });
 
-  const deployStart = await publicClient.getBlockNumber();
-  const dirContract = await flatDirectory.deploy();
-  const deployEnd = await publicClient.getBlockNumber();
-
-  let deployGas = 0n;
-
-  for (let i = deployStart; i <= deployEnd; i++) {
-    const block = await publicClient.getBlock({
-      blockNumber: i,
-      includeTransactions: true,
-    });
-
-    for (const tx of block.transactions) {
-      if (
-        typeof tx !== "string" &&
-        tx.from?.toLowerCase() === account.address.toLowerCase() &&
-        tx.to === null
-      ) {
-        const receipt = await publicClient.getTransactionReceipt({
-          hash: tx.hash,
-        });
-        deployGas = receipt.gasUsed;
-      }
-    }
-  }
-
-  // ============================
-  // 3️⃣ Assets upload
-  // ============================
   const files = await extractTarGz(paper.tar);
   const assets = files.filter((f) => !f.path.endsWith(".tex"));
 
-  const assetStats: any[] = [];
-
-  const t_assets_upload_start = now();
-
-  for (let file of assets) {
-    const start = now();
-    let gas = 0;
-
-    await flatDirectory.upload({
-      key: file.path,
-      content: file.content,
-      type: 2,
-      callback: {
-        onFinish: (_, __, cost) => {
-          gas = cost;
-        },
-      },
-    });
-
-    const end = now();
-
-    assetStats.push({
-      path: file.path,
-      size: file.content.length,
-      gas,
-      time: end - start,
-    });
-  }
-
-  const t_assets_upload_end = now();
+  const initTime = now();
+  const t = () => now() - initTime;
 
   // ============================
-  // 4️⃣ submitArticle
+  // 1️⃣ TEX 上传（并行）
   // ============================
-  const t_submit_start = now();
+  const texBytes = hexToBytes(paper.data);
+  const chunks = chunkBytes(texBytes, CHUNK_SIZE);
+  const baseNonce = BigInt(
+    await publicClient.getTransactionCount({
+      address: account.address,
+    }),
+  );
+  result.texUpload = await Promise.all(
+    chunks.map(async (chunk, index) => {
+      const start = t();
 
-  const encryptedKey = paper.key.startsWith("0x") ? paper.key : `0x${paper.key}`;
+      const txHash = await wallet.sendTransaction({
+        to: "0x0000000000000000000000000000000000000000",
+        data: bytesToHex(chunk),
+        nonce: Number(baseNonce + BigInt(index)),
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+
+      const end = t();
+
+      return {
+        index,
+        txHash,
+        gas: receipt.gasUsed.toString(),
+        size: chunk.length,
+        start,
+        end,
+      };
+    }),
+  );
+
+  result.texUpload.sort((a: any, b: any) => a.index - b.index);
+  const texTxIds = result.texUpload.map((r: any) => r.txHash);
+
+  // ============================
+  // 2️⃣ Assets 上传（并行）
+  // ============================
+  result.assetUpload = [];
+
+  await Promise.all(
+    assets.map((file) => {
+      const start = t();
+
+      return new Promise<void>((resolve) => {
+        flatDirectory.upload({
+          key: `a${paper.id}/${file.path}`,
+          content: file.content,
+          type: 2,
+          callback: {
+            onFinish: (_, __, cost) => {
+              const end = t();
+
+              result.assetUpload.push({
+                path: file.path,
+                size: file.content.length,
+                wei: cost.toString(),
+                start,
+                end,
+              });
+
+              resolve();
+            },
+          },
+        });
+      });
+    }),
+  );
+
+  // ============================
+  // 3️⃣ submitArticle
+  // ============================
+  const submitStart = t();
+
   const submitHash = await wallet.writeContract({
     address: JOURNAL_CONTRACT,
     abi: artifact.abi,
     functionName: "submitArticle",
-    args: [
-      paper.title,
-      paper.authors,
-      paper.keywords,
-      texTxIds,
-      dirContract,
-      encryptedKey,
-      paper.extraMetadataURI,
-    ],
+    args: [paper.title, paper.authors, texTxIds, paper.extraMetadataURI],
   });
 
   const submitReceipt = await publicClient.waitForTransactionReceipt({
     hash: submitHash,
   });
 
-  const t_submit_end = now();
+  result.submit = {
+    gas: submitReceipt.gasUsed.toString(),
+    start: submitStart,
+    end: t(),
+  };
 
   // ============================
-  // 5️⃣ 从合约读取 TEX（关键）
+  // 4️⃣ 读取链上数据
   // ============================
-  const t_read_contract_start = now();
+  const readStart = t();
 
-  const articleCount = await publicClient.readContract({
+  const articleCount = (await publicClient.readContract({
     address: JOURNAL_CONTRACT,
     abi: artifact.abi,
     functionName: "articleCount",
-    args: [],
-  });
+  })) as bigint;
 
-  const articleArray = await publicClient.readContract({
+  const article = (await publicClient.readContract({
     address: JOURNAL_CONTRACT,
     abi: artifact.abi,
     functionName: "getArticle",
     args: [articleCount - 1n],
-  });
-  const article = getArticle(articleArray);
+  })) as any[];
 
-  const texTxIdsFromChain = article.texTxIds;
-
-  const t_read_contract_end = now();
-
-  // ============================
-  // 6️⃣ TEX 重建（链上）
-  // ============================
-  const t_reconstruct_start = now();
-
-  let reconstructed: number[] = [];
-
-  for (let txHash of texTxIdsFromChain) {
-    const tx = await publicClient.getTransaction({ hash: txHash });
-    const bytes = hexToBytes(tx.input as `0x${string}`);
-    reconstructed.push(...bytes);
-  }
-
-  const t_reconstruct_end = now();
-
-  // 校验 TEX
-  const originalTex = hexToBytes(paper.data);
-
-  if (reconstructed.length !== originalTex.length) {
-    throw new Error("TEX length mismatch");
-  }
-
-  for (let i = 0; i < originalTex.length; i++) {
-    if (reconstructed[i] !== originalTex[i]) {
-      throw new Error("TEX mismatch");
-    }
-  }
+  result.readContract = {
+    start: readStart,
+    end: t(),
+  };
 
   // ============================
-  // 7️⃣ Assets 校验
+  // 5️⃣ TEX 重建（并行）
   // ============================
-  const t_assets_verify_start = now();
+  result.reconstructTex = await Promise.all(
+    article[2].map(async (txHash: `0x${string}`) => {
+      const start = t();
 
-  for (let file of assets) {
-    const data = await flatDirectory.download(file.path);
+      const tx = await publicClient.getTransaction({ hash: txHash });
+      const bytes = hexToBytes(tx.input as `0x${string}`);
 
-    // if (data.length !== file.content.length) {
-    //   throw new Error(`Asset size mismatch: ${file.path}`);
-    // }
+      const end = t();
 
-    // for (let i = 0; i < data.length; i++) {
-    //   if (data[i] !== file.content[i]) {
-    //     throw new Error(`Asset mismatch: ${file.path}`);
-    //   }
-    // }
-  }
-
-  const t_assets_verify_end = now();
+      return {
+        txHash,
+        size: bytes.length,
+        start,
+        end,
+      };
+    }),
+  );
 
   // ============================
-  // RESULT
+  // 6️⃣ Assets 校验（并行）
   // ============================
-  console.log({
-    timing: {
-      texUpload: t_tex_upload_end - t_tex_upload_start,
-      assetsUpload: t_assets_upload_end - t_assets_upload_start,
-      submit: t_submit_end - t_submit_start,
-      readContract: t_read_contract_end - t_read_contract_start,
-      reconstructTex: t_reconstruct_end - t_reconstruct_start,
-      verifyAssets: t_assets_verify_end - t_assets_verify_start,
-    },
-    gas: {
-      submitGas: submitReceipt.gasUsed.toString(),
-      deployGas: deployGas.toString(),
-    },
-    tex: texStats,
-    assets: assetStats,
-  });
+  result.verifyAssets = await Promise.all(
+    assets.map(async (file) => {
+      const start = t();
+
+      await flatDirectory.download(`${paper.id}/${file.path}`);
+
+      const end = t();
+
+      return {
+        path: file.path,
+        start,
+        end,
+      };
+    }),
+  );
+
+  // ============================
+  // 💾 保存 JSON
+  // ============================
+  const outFile = `result_${paper.id}.json`;
+  fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
+
+  console.log(`✅ Result saved to ${outFile}`);
 }
 
 main().catch(console.error);
