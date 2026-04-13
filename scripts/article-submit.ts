@@ -163,7 +163,7 @@ async function main() {
 
       return new Promise<void>((resolve) => {
         flatDirectory.upload({
-          key: `a${paper.id}/${file.path}`,
+          key: `c${paper.id}/${file.path}`,
           content: file.content,
           type: 2,
           callback: {
@@ -201,8 +201,12 @@ async function main() {
   const submitReceipt = await publicClient.waitForTransactionReceipt({
     hash: submitHash,
   });
+  const transaction = await publicClient.getTransaction({ hash: submitHash });
+  const calldata = transaction.input;
+  const calldataSize = (calldata.length - 2) / 2;
 
   result.submit = {
+    size: calldataSize,
     gas: submitReceipt.gasUsed.toString(),
     start: submitStart,
     end: t(),

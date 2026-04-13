@@ -62,13 +62,22 @@ async function main() {
   // });
   // console.log("submitHash:", gas);
 
-  const submitHash = await wallet.writeContract({
-    address: JOURNAL_CONTRACT,
-    abi: artifact.abi,
-    functionName: "submitArticle",
-    args,
-  });
-  console.log("submitHash:", submitHash);
+  // const submitHash = await wallet.writeContract({
+  //   address: JOURNAL_CONTRACT,
+  //   abi: artifact.abi,
+  //   functionName: "submitArticle",
+  //   args,
+  // });
+  // console.log("submitHash:", submitHash);
+  const submitHash = "0xd9828990ce0c5ab7b4770e8ad14ce4d55001d0af57c39e071cbf820d88fd46f2";
+  // 等待交易确认后获取收据
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: submitHash });
+
+  // 获取交易的 input 数据
+  const transaction = await publicClient.getTransaction({ hash: submitHash });
+  const calldata = transaction.input;
+  const calldataSize = (calldata.length - 2) / 2;
+  console.log(`Calldata 大小: ${calldataSize} bytes`);
 
   // const articleCount = await publicClient.readContract({
   //   address: JOURNAL_CONTRACT,
