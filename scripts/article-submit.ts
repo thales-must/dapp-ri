@@ -13,9 +13,12 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
 const RPC_URL = process.env.RPC_URL!;
 const ETHSTORAGE_RPC = process.env.ETHSTORAGE_RPC!;
 const JOURNAL_CONTRACT = process.env.JOURNAL_CONTRACT as `0x${string}`;
+const FLAT_KEY = process.env.FLAT_KEY as `0x${string}`;
 
 const rawData = fs.readFileSync(process.env.PAPER_JSON_FILE!, "utf-8");
 const paper = JSON.parse(rawData);
+
+paper.id = `${paper.id}`;
 
 const CHUNK_SIZE = 32768;
 const now = () => Date.now();
@@ -102,7 +105,7 @@ async function main() {
   const flatDirectory = await FlatDirectory.create({
     rpc: RPC_URL,
     ethStorageRpc: ETHSTORAGE_RPC,
-    privateKey: PRIVATE_KEY,
+    privateKey: FLAT_KEY,
     address: dirContract,
   });
 
@@ -113,15 +116,53 @@ async function main() {
   const t = () => now() - initTime;
 
   // ============================
-  // 1️⃣ TEX 上传（并行）
+  // 1️⃣ Assets 上传（并行，不阻塞）
+  // ============================
+  result.assetUpload = [];
+
+  const assetPromise = Promise.all(
+    assets.map((file, idx) => {
+      const start = t();
+
+      return new Promise<void>((resolve) => {
+        flatDirectory.upload({
+          key: `${paper.id}/${file.path}`,
+          content: file.content,
+          type: 2,
+          callback: {
+            onFinish: (chunks, size, cost) => {
+              const end = t();
+
+              result.assetUpload.push({
+                index: idx,
+                path: file.path,
+                size,
+                chunks,
+                wei: cost.toString(),
+                start,
+                end,
+              });
+
+              resolve();
+            },
+          },
+        });
+      });
+    }),
+  );
+
+  // ============================
+  // 2️⃣ TEX 上传（并行 + 安全 nonce）
   // ============================
   const texBytes = hexToBytes(paper.data);
   const chunks = chunkBytes(texBytes, CHUNK_SIZE);
-  const baseNonce = BigInt(
-    await publicClient.getTransactionCount({
-      address: account.address,
-    }),
-  );
+
+  // 🔥 关键：一次性锁定 nonce
+  const baseNonce = await publicClient.getTransactionCount({
+    address: account.address,
+    blockTag: "pending", // 🔥 必须用 pending
+  });
+
   result.texUpload = await Promise.all(
     chunks.map(async (chunk, index) => {
       const start = t();
@@ -129,7 +170,7 @@ async function main() {
       const txHash = await wallet.sendTransaction({
         to: "0x0000000000000000000000000000000000000000",
         data: bytesToHex(chunk),
-        nonce: Number(baseNonce + BigInt(index)),
+        nonce: baseNonce + index, // ✅ 手动控制
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({
@@ -149,45 +190,14 @@ async function main() {
     }),
   );
 
+  // 🔥 顺序恢复（必须）
   result.texUpload.sort((a: any, b: any) => a.index - b.index);
+
+  // 🔥 提取 TXIDs
   const texTxIds = result.texUpload.map((r: any) => r.txHash);
 
   // ============================
-  // 2️⃣ Assets 上传（并行）
-  // ============================
-  result.assetUpload = [];
-
-  await Promise.all(
-    assets.map((file) => {
-      const start = t();
-
-      return new Promise<void>((resolve) => {
-        flatDirectory.upload({
-          key: `c${paper.id}/${file.path}`,
-          content: file.content,
-          type: 2,
-          callback: {
-            onFinish: (_, __, cost) => {
-              const end = t();
-
-              result.assetUpload.push({
-                path: file.path,
-                size: file.content.length,
-                wei: cost.toString(),
-                start,
-                end,
-              });
-
-              resolve();
-            },
-          },
-        });
-      });
-    }),
-  );
-
-  // ============================
-  // 3️⃣ submitArticle
+  // 3️⃣ submitArticle（串行）
   // ============================
   const submitStart = t();
 
@@ -195,7 +205,7 @@ async function main() {
     address: JOURNAL_CONTRACT,
     abi: artifact.abi,
     functionName: "submitArticle",
-    args: [paper.title, paper.authors, texTxIds, paper.extraMetadataURI],
+    args: [paper.id, paper.title, paper.authors, texTxIds, paper.extraMetadataURI],
   });
 
   const submitReceipt = await publicClient.waitForTransactionReceipt({
@@ -211,6 +221,14 @@ async function main() {
     start: submitStart,
     end: t(),
   };
+
+  // ============================
+  // 4️⃣ 等待 Assets 完成
+  // ============================
+  await assetPromise;
+
+  // 保证顺序（可选但建议）
+  result.assetUpload.sort((a: any, b: any) => a.index - b.index);
 
   // ============================
   // 4️⃣ 读取链上数据
@@ -239,7 +257,7 @@ async function main() {
   // 5️⃣ TEX 重建（并行）
   // ============================
   result.reconstructTex = await Promise.all(
-    article[2].map(async (txHash: `0x${string}`) => {
+    article[3].map(async (txHash: `0x${string}`) => {
       const start = t();
 
       const tx = await publicClient.getTransaction({ hash: txHash });
@@ -278,7 +296,7 @@ async function main() {
   // ============================
   // 💾 保存 JSON
   // ============================
-  const outFile = `result_${paper.id}.json`;
+  const outFile = `analysis/files/result_${paper.id}.json`;
   fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
 
   console.log(`✅ Result saved to ${outFile}`);

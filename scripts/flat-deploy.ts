@@ -5,7 +5,7 @@ import { sepolia } from "viem/chains";
 import { FlatDirectory } from "ethstorage-sdk";
 
 // ----------------------------
-const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
+const PRIVATE_KEY = process.env.FLAT_KEY as `0x${string}`;
 const RPC_URL = process.env.RPC_URL!;
 
 async function main() {
