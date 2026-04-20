@@ -56,11 +56,21 @@ After setting the variable, you can run the deployment with the Sepolia network:
 npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
 ```
 
-# pipeline合约
+# full chain pipeline
+
+## 数据收集
+
+`analysis/datasets.ipynb`文件可以按照要求收集需要的数据
+
+## 测试压缩算法
+
+`analysis/compression.ipynb`文件可以测试压缩算法
+
+## pipeline合约
 
 准备好合约
 
-## 环境变量
+### 环境变量
 
 设置一下环境变量
 
@@ -77,13 +87,13 @@ JOURNAL_CONTRACT=journalManager合约部署之后的合约地址
 PAPER_JSON_FILE=执行流水线的论文的metadata信息
 ```
 
-## 测试JournalManager合约
+### 测试JournalManager合约
 
 ```bash
 npx hardhat test
 ```
 
-## 部署ethstorage的flat-directory
+### 部署ethstorage的flat-directory
 
 ```bash
 npx hardhat run script/flat-deploy.ts
@@ -91,7 +101,7 @@ npx hardhat run script/flat-deploy.ts
 
 会获得合约flat-directory的地址
 
-## 部署JournalManager合约
+### 部署JournalManager合约
 
 部署时候需要携带合约flat-directory的地址
 
@@ -101,7 +111,7 @@ network可以选本地网，测试网，或者主网
 npx hardhat ignition deploy ./ignition/modules/JournalManager.ts --network sepolia
 ```
 
-## 测试pipline
+### 测试pipline
 
 必须设置`PAPER_JSON_FILE`为要执行流水线的`paper`的`.json`文件
 
@@ -125,7 +135,7 @@ npx hardhat run .\scripts\article-submit.ts
 
 最后会生成文件`analysis/files/result_[paper ID].json`
 
-## 解析pipeline
+### 解析pipeline
 
 用`analysis/pipline.ipynb`可解析pipeline生成的json文件
 

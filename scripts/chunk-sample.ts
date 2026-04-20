@@ -7,7 +7,7 @@ import { stringify } from "csv-stringify/sync";
 
 // ====== 配置 ======
 const DATA_DIR = "D:/thales/must/destorage/src/files/hexs";
-const OUTPUT_CSV = "./opt/chunk.csv";
+const OUTPUT_CSV = "./analysis/files/chunk-sample.csv";
 
 const PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
@@ -53,9 +53,6 @@ function chunkHex(hex: string, chunkSize: number): `0x${string}`[] {
 
 // ====== send（正确模型） ======
 async function sendChunk(chunk: `0x${string}`) {
-  let totalGasUsed = 0n;
-  let totalTime = 0;
-
   const start = Date.now();
 
   const hash = await walletClient.sendTransaction({
@@ -69,12 +66,9 @@ async function sendChunk(chunk: `0x${string}`) {
 
   const end = Date.now();
 
-  totalGasUsed += receipt.gasUsed;
-  totalTime += end - start;
-
   return {
-    totalGasUsed,
-    totalTime,
+    totalGasUsed: receipt.gasUsed,
+    totalTime: end - start,
   };
 }
 
@@ -106,7 +100,9 @@ async function main() {
       const res = await sendChunk(chunks[i]);
 
       totalGas += res.totalGasUsed;
-      totalTime += res.totalTime;
+      if (totalTime < res.totalTime) {
+        totalTime = res.totalTime;
+      }
     }
 
     const endUpload = Date.now();

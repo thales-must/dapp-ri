@@ -21,6 +21,8 @@
 
 /ignition/deployments
 
+__pycache__/
+
 /opt
 .env
 
