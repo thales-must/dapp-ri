@@ -4,7 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { stringify } from "csv-stringify/sync";
 
 // ====== 配置 ======
-const PAPER_JSON_FILE = "opt/2603.25100v1.json";
+const PAPER_JSON_FILE = "./analysis/files/hexs/2603.25100v1.json";
 const OUTPUT_CSV = "./analysis/files/chunk-gas-latency.csv";
 
 const PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";

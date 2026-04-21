@@ -1,142 +1,319 @@
-# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
+# 📦 Full Chain Pipeline
 
-This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+This project implements a **complete on-chain academic publishing pipeline**, including data collection, compression, encryption, chunking, and full blockchain execution. It enables end-to-end reproducible experiments for storing academic papers fully on-chain.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+---
 
-## Project Overview
+# 🧱 Environment Setup
 
-This example project includes:
+## Python
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+- Python 3.14
 
-## Usage
+Install dependencies:
 
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
-npx hardhat test
+```bash
+pip install -r requirements.txt
 ```
 
-You can also selectively run the Solidity or `node:test` tests:
+---
 
-```shell
-npx hardhat test solidity
-npx hardhat test nodejs
+## Node.js
+
+- Node.js 24.11
+- npm 11.6
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
-### Make a deployment to Sepolia
+---
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+# 📊 Data Collection
 
-To run the deployment to a local chain:
+Use:
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+```
+analysis/datasets.ipynb
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+to collect dataset from arXiv according to requirements.
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+Output file:
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+```
+analysis/files/arxiv_tex_dataset.xlsx
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+---
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
+# 🗜️ Compression Benchmark
+
+Use:
+
+```
+analysis/compression.ipynb
 ```
 
-# full chain pipeline
+to evaluate different compression algorithms.
 
-## 数据收集
+Output file:
 
-`analysis/datasets.ipynb`文件可以按照要求收集需要的数据
+```
+analysis/files/compression.xlsx
+```
 
-## 测试压缩算法
+---
 
-`analysis/compression.ipynb`文件可以测试压缩算法
+# 🔐 Compression & Encryption
 
-## pipeline合约
+Use:
 
-准备好合约
+```
+analysis/hex.ipynb
+```
 
-### 环境变量
+to process data with:
 
-设置一下环境变量
+- Compression
+- Encryption
+- Measurement of compression ratio, encryption time, and decryption time
+
+Output file:
+
+```
+analysis/files/hex.xlsx
+```
+
+Additionally, in:
+
+```
+analysis/files/hexs/
+```
+
+each paper generates a JSON file containing:
+
+- Compressed & encrypted data (hex)
+- RSA-encrypted decryption key
+
+---
+
+# 🔐 Cryptographic Analysis
+
+Use:
+
+```
+analysis/crypto.ipynb
+```
+
+to analyze encryption performance across all samples, including:
+
+- Symmetric encryption (AES)
+- Asymmetric encryption (RSA)
+
+---
+
+# ⛓️ Chunk Analysis (Local Simulation)
+
+This experiment requires blockchain simulation using Hardhat.
+
+Start local node:
+
+```bash
+npx hardhat node
+```
+
+---
+
+## Single Sample Chunk Test
+
+Set:
+
+```
+PAPER_JSON_FILE
+```
+
+Run:
+
+```bash
+npx hardhat run scripts/chunk-gas-latency.ts
+```
+
+Output:
+
+```
+analysis/files/chunk-gas-latency.csv
+```
+
+Analyze results using:
+
+```
+analysis/chunk.ipynb
+```
+
+---
+
+## Full Dataset Chunk Test
+
+Set:
+
+```
+CHUNK_SIZE
+```
+
+Run:
+
+```bash
+npx hardhat run scripts/chunk-sample.ts
+```
+
+Output:
+
+```
+analysis/files/chunk-sample.csv
+```
+
+Analyze results using:
+
+```
+analysis/chunk.ipynb
+```
+
+> You can stop the Hardhat node after experiments are completed.
+
+---
+
+# 🌐 Full Pipeline (Testnet / Mainnet)
+
+⚠️ This stage interacts with real blockchain networks and may incur costs.
+
+---
+
+## 🔧 Environment Variables
+
+Create environment file:
 
 ```bash
 cp .env.example .env
 ```
 
+Configure:
+
 ```ini
-PRIVATE_KEY=用于部署合约的account私钥
-FLAT_KEY=用于部署flat-directory的account私钥，尽量不要跟PRIVATE_KEY相同，否则会有冲突
-RPC_URL=区块链网址
-ETHSTORAGE_RPC=ethstorage网址
-JOURNAL_CONTRACT=journalManager合约部署之后的合约地址
-PAPER_JSON_FILE=执行流水线的论文的metadata信息
+PRIVATE_KEY=Account private key for contract deployment
+FLAT_KEY=Private key for flat-directory deployment (should differ from PRIVATE_KEY)
+RPC_URL=Blockchain RPC endpoint
+ETHSTORAGE_RPC=EthStorage RPC endpoint
+JOURNAL_CONTRACT=Deployed JournalManager contract address
+PAPER_JSON_FILE=Path to paper metadata JSON file
 ```
 
-### 测试JournalManager合约
+---
+
+## 🧪 Test JournalManager Contract
 
 ```bash
 npx hardhat test
 ```
 
-### 部署ethstorage的flat-directory
+---
+
+## 📦 Deploy EthStorage Flat Directory
 
 ```bash
-npx hardhat run script/flat-deploy.ts
+npx hardhat run scripts/flat-deploy.ts
 ```
 
-会获得合约flat-directory的地址
+This returns the flat-directory contract address, which should be added to `.env`.
 
-### 部署JournalManager合约
+---
 
-部署时候需要携带合约flat-directory的地址
+## 🏛️ Deploy JournalManager Contract
 
-network可以选本地网，测试网，或者主网
+Deployment requires the flat-directory address.
+
+You can choose network:
+
+- local
+- testnet (e.g., Sepolia)
+- mainnet
 
 ```bash
 npx hardhat ignition deploy ./ignition/modules/JournalManager.ts --network sepolia
 ```
 
-### 测试pipline
+---
 
-必须设置`PAPER_JSON_FILE`为要执行流水线的`paper`的`.json`文件
+## 🚀 Run Full Pipeline
+
+Ensure:
+
+```
+PAPER_JSON_FILE
+```
+
+points to a valid paper JSON file:
 
 ```json
 {
-  "id": paper ID,
-  "title": paper title,
-  "authors": paper authors，[string]格式,
-  "tar": paper源文件tar.gz打包,
-  "extraMetadataURI": paper URI,
-  "key": rsa加密后的解密私钥,
-  "data": tex内容压缩加密后的hex文件
+  "id": "paper ID",
+  "title": "paper title",
+  "authors": ["author1", "author2"],
+  "tar": "paper source tar.gz",
+  "extraMetadataURI": "paper URI",
+  "key": "RSA-encrypted private key",
+  "data": "compressed & encrypted hex data"
 }
 ```
 
-把论文上全链，并且assets上传至ethstorage，并计算消耗的gas或者wei
+Run:
 
 ```bash
-npx hardhat run .\scripts\article-submit.ts
+npx hardhat run scripts/article-submit.ts
 ```
 
-最后会生成文件`analysis/files/result_[paper ID].json`
+This will:
 
-### 解析pipeline
+- Store paper content on-chain
+- Upload assets to EthStorage
+- Measure gas / wei consumption
 
-用`analysis/pipline.ipynb`可解析pipeline生成的json文件
+Output file:
 
-可生成图片图片和表格
+```
+analysis/files/result_[paper ID].json
+```
+
+---
+
+## 📈 Pipeline Analysis
+
+Use:
+
+```
+analysis/pipeline.ipynb
+```
+
+to analyze pipeline outputs and generate:
+
+- Figures
+- Tables
+- Performance summaries
+
+---
+
+# 📌 Summary
+
+This project implements a full pipeline for on-chain academic publishing:
+
+```
+Data Collection → Compression → Encryption → Chunking → On-chain Storage → Reconstruction
+```
+
+It is suitable for:
+
+- Blockchain storage research
+- Decentralized scientific publishing (DeSci)
+- On-chain data persistence experiments
