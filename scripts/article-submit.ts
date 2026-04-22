@@ -18,7 +18,7 @@ const FLAT_KEY = process.env.FLAT_KEY as `0x${string}`;
 const rawData = fs.readFileSync(process.env.PAPER_JSON_FILE!, "utf-8");
 const paper = JSON.parse(rawData);
 
-paper.id = `t5${paper.id}`;
+paper.id = `b2${paper.id}`;
 
 const CHUNK_SIZE = 32768;
 const now = () => Date.now();

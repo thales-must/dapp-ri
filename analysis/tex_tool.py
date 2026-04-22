@@ -26,7 +26,7 @@ class TexExtractor:
                         f = tar.extractfile(member)
                         if f:
                             content = f.read().decode("utf-8", errors="ignore")
-                            self._files[member.name] = content
+                            self._files[member.name] = self.remove_comments(content)
         except:
             self._files["err"] = ""
 
@@ -34,9 +34,15 @@ class TexExtractor:
     # 2. 找主文件（heuristic）
     # -------------------------
     def find_main_tex(self) -> str:
+        d = {}
+        n = 0
         for name, content in self._files.items():
             if "\\begin{document}" in content:
-                return name
+                # return name
+                d[name] = content
+                n += 1
+        if n > 0:
+            return max(d, key=lambda k: len(d[k]))
         # fallback：最大文件
         return max(self._files, key=lambda k: len(self._files[k]))
 
@@ -73,10 +79,14 @@ class TexExtractor:
         if visited is None:
             visited = set()
 
-        pattern = re.compile(r"\\(input|include){([^}]+)}")
+        pattern = re.compile(r"\\(input|include|subfile)\s*(?:{([^}]+)}|([^\s%{]+))")
 
         def replace(match):
-            filename = match.group(2)
+            cmd = match.group(1)
+            filename = match.group(2) or match.group(3)
+
+            if not filename:
+                return match.group(0)
 
             if not filename.endswith(".tex"):
                 filename += ".tex"
@@ -88,8 +98,7 @@ class TexExtractor:
             visited.add(filename)
 
             if filename in self._files:
-                sub_content = self._files[filename]
-                sub_content = self.remove_comments(sub_content)
+                sub_content = self.remove_comments(self._files[filename])
                 return self.resolve_inputs(sub_content, visited)
             else:
                 return ""
