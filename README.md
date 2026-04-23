@@ -44,7 +44,13 @@ to collect dataset from arXiv according to requirements.
 Output file:
 
 ```
-analysis/files/arxiv_tex_dataset.xlsx
+analysis/files/arxiv_dataset.xlsx
+```
+
+filter file:
+
+```
+analysis/files/work_dataset.xlsx
 ```
 
 ---
@@ -207,7 +213,6 @@ FLAT_KEY=Private key for flat-directory deployment (should differ from PRIVATE_K
 RPC_URL=Blockchain RPC endpoint
 ETHSTORAGE_RPC=EthStorage RPC endpoint
 JOURNAL_CONTRACT=Deployed JournalManager contract address
-PAPER_JSON_FILE=Path to paper metadata JSON file
 ```
 
 ---
@@ -251,7 +256,8 @@ npx hardhat ignition deploy ./ignition/modules/JournalManager.ts --network sepol
 Ensure:
 
 ```
-PAPER_JSON_FILE
+paperJsonFile
+batch()
 ```
 
 points to a valid paper JSON file:
@@ -271,7 +277,7 @@ points to a valid paper JSON file:
 Run:
 
 ```bash
-npx hardhat run scripts/article-submit.ts
+npx hardhat run scripts/article-event.ts
 ```
 
 This will:
@@ -283,7 +289,7 @@ This will:
 Output file:
 
 ```
-analysis/files/result_[paper ID].json
+analysis/files/event-[paper ID].csv
 ```
 
 ---
@@ -293,7 +299,7 @@ analysis/files/result_[paper ID].json
 Use:
 
 ```
-analysis/pipeline.ipynb
+analysis/trace.ipynb
 ```
 
 to analyze pipeline outputs and generate:
