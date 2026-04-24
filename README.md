@@ -231,7 +231,7 @@ npx hardhat test
 npx hardhat run scripts/flat-deploy.ts
 ```
 
-This returns the flat-directory contract address, which should be added to `.env`.
+This returns the flat-directory contract address, which should be used as parameter at nest step.
 
 ---
 
